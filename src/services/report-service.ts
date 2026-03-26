@@ -90,7 +90,7 @@ export async function getReportRecords(filters?: ReportFilters) {
 
 async function updateReport(
   id: string,
-  action: "process" | "revoke",
+  action: "process" | "revoke" | "reject",
   remark?: string,
 ): Promise<ReportRecord> {
   const data = await requestJson<ReportActionResponse>(
@@ -109,6 +109,10 @@ export function processReport(id: string, remark?: string) {
 
 export function revokeReport(id: string, remark?: string) {
   return updateReport(id, "revoke", remark);
+}
+
+export function rejectReport(id: string, remark?: string) {
+  return updateReport(id, "reject", remark);
 }
 
 export async function getActionLogs(reportId: string): Promise<ActionLog[]> {
@@ -137,6 +141,14 @@ export async function batchRevokeReports(ids: string[], remark?: string) {
   const data = await requestJson<BatchActionResponse>("/api/reports/batch", {
     method: "POST",
     body: JSON.stringify({ ids, action: "revoke", remark: remark ?? "", operator: DEFAULT_OPERATOR }),
+  });
+  return data.data.map(normalizeReportRecord);
+}
+
+export async function batchRejectReports(ids: string[], remark?: string) {
+  const data = await requestJson<BatchActionResponse>("/api/reports/batch", {
+    method: "POST",
+    body: JSON.stringify({ ids, action: "reject", remark: remark ?? "", operator: DEFAULT_OPERATOR }),
   });
   return data.data.map(normalizeReportRecord);
 }

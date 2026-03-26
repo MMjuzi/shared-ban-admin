@@ -76,6 +76,7 @@ interface ReportTableProps {
   onSelectionChange: (keys: Key[]) => void;
   onProcess: (id: string) => void;
   onRevoke: (id: string) => void;
+  onReject: (id: string) => void;
   onRowClick: (record: ReportRecord) => void;
 }
 
@@ -87,6 +88,7 @@ export function ReportTable({
   onSelectionChange,
   onProcess,
   onRevoke,
+  onReject,
   onRowClick,
 }: ReportTableProps) {
   const columns = useMemo<ColumnsType<ReportRecord>>(
@@ -157,7 +159,9 @@ export function ReportTable({
       {
         title: "状态", dataIndex: "status", width: 100,
         render: (v: ReportRecord["status"]) =>
-          v === "processed" ? <Tag color="success">已处理</Tag> : <Tag color="processing">待处理</Tag>,
+          v === "processed" ? <Tag color="success">已处理</Tag>
+            : v === "rejected" ? <Tag color="warning">已驳回</Tag>
+            : <Tag color="processing">待处理</Tag>,
       },
       {
         title: "封号时长", key: "banDays", width: 130,
@@ -168,23 +172,26 @@ export function ReportTable({
       },
       { title: "更新时间", dataIndex: "updatedAt", width: 170, render: (v: string) => formatDateTime(v) },
       {
-        title: "操作", key: "action", width: 160, fixed: "right",
+        title: "操作", key: "action", width: 220, fixed: "right",
         render: (_, record) => {
           const busy = actionLoadingId === record.id;
-          const canProcess = record.status !== "processed";
-          const canRevoke = record.status === "processed";
+          const isPending = record.status === "pending";
+          const isProcessed = record.status === "processed";
           return (
             <Flex gap={8}>
-              <Button type="primary" size="small" loading={busy && canProcess} disabled={!canProcess}
+              <Button type="primary" size="small" loading={busy && isPending} disabled={!isPending}
                 onClick={(e) => { e.stopPropagation(); onProcess(record.id); }}>处理</Button>
-              <Button danger size="small" loading={busy && canRevoke} disabled={!canRevoke}
+              <Button size="small" loading={busy && isPending} disabled={!isPending}
+                style={isPending ? { color: "#faad14", borderColor: "#faad14" } : undefined}
+                onClick={(e) => { e.stopPropagation(); onReject(record.id); }}>驳回</Button>
+              <Button danger size="small" loading={busy && isProcessed} disabled={!isProcessed}
                 onClick={(e) => { e.stopPropagation(); onRevoke(record.id); }}>撤销</Button>
             </Flex>
           );
         },
       },
     ],
-    [actionLoadingId, onProcess, onRevoke]
+    [actionLoadingId, onProcess, onRevoke, onReject]
   );
 
   return (
@@ -193,7 +200,7 @@ export function ReportTable({
       columns={columns}
       dataSource={records}
       loading={loading}
-      scroll={{ x: 2000 }}
+      scroll={{ x: 2100 }}
       pagination={{ pageSize: 10, showSizeChanger: false }}
       rowSelection={{ selectedRowKeys, onChange: (keys) => onSelectionChange(keys) }}
       onRow={(record) => ({ onClick: () => onRowClick(record), style: { cursor: "pointer" } })}

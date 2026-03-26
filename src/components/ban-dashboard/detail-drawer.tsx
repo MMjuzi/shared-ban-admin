@@ -14,6 +14,7 @@ import {
 } from "antd";
 import {
   CheckCircleOutlined,
+  CloseCircleOutlined,
   LaptopOutlined,
   MobileOutlined,
   TabletOutlined,
@@ -94,6 +95,7 @@ function DrawerBody({ record }: { record: ReportRecord }) {
   }, [fetchLogs]);
 
   const isProcessed = record.status === "processed";
+  const isRejected = record.status === "rejected";
 
   return (
     <>
@@ -108,7 +110,9 @@ function DrawerBody({ record }: { record: ReportRecord }) {
         <Descriptions.Item label="用户近月付费">{formatCurrency(record.recentPaidAmount)}</Descriptions.Item>
         <Descriptions.Item label="当月设备数">{record.monthlyDeviceCount} 台</Descriptions.Item>
         <Descriptions.Item label="状态">
-          {isProcessed ? <Tag color="success">已处理</Tag> : <Tag color="processing">待处理</Tag>}
+          {isProcessed ? <Tag color="success">已处理</Tag>
+            : isRejected ? <Tag color="warning">已驳回</Tag>
+            : <Tag color="processing">待处理</Tag>}
         </Descriptions.Item>
         {isProcessed && record.banDays != null && (
           <>
@@ -170,12 +174,14 @@ function DrawerBody({ record }: { record: ReportRecord }) {
       ) : (
         <Timeline
           items={logs.map((log) => ({
-            color: log.action === "process" ? "green" : "red",
-            dot: log.action === "process" ? <CheckCircleOutlined /> : <UndoOutlined />,
+            color: log.action === "process" ? "green" : log.action === "reject" ? "orange" : "red",
+            dot: log.action === "process" ? <CheckCircleOutlined />
+              : log.action === "reject" ? <CloseCircleOutlined />
+              : <UndoOutlined />,
             children: (
               <div>
                 <Flex justify="space-between" align="center">
-                  <Text strong>{log.action === "process" ? "处理封号" : "撤销处理"}</Text>
+                  <Text strong>{log.action === "process" ? "处理封号" : log.action === "reject" ? "驳回举报" : "撤销处理"}</Text>
                   <Text type="secondary" style={{ fontSize: 12 }}>{formatDateTime(log.createdAt)}</Text>
                 </Flex>
                 <div><Text type="secondary">操作人：{log.operator}</Text></div>

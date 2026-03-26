@@ -31,6 +31,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   getReportsByUid,
   processReport,
+  rejectReport,
   revokeReport,
 } from "@/services/report-service";
 import { DetailDrawer } from "@/components/ban-dashboard/detail-drawer";
@@ -156,12 +157,13 @@ export default function UserDetailPage() {
     async (remark: string) => {
       setModalLoading(true);
       try {
-        const updated =
-          modalAction === "process"
-            ? await processReport(modalTargetId, remark)
-            : await revokeReport(modalTargetId, remark);
+        const actionFn = modalAction === "process" ? processReport
+          : modalAction === "reject" ? rejectReport
+          : revokeReport;
+        const actionLabel = modalAction === "process" ? "处理" : modalAction === "reject" ? "驳回" : "撤销";
+        const updated = await actionFn(modalTargetId, remark);
         setRecords((cur) => cur.map((r) => (r.id === modalTargetId ? updated : r)));
-        await messageApi.success(modalAction === "process" ? "处理成功" : "撤销成功");
+        await messageApi.success(`${actionLabel}成功`);
       } catch (e) {
         await messageApi.error(e instanceof Error ? e.message : "操作失败");
       } finally {
@@ -233,7 +235,9 @@ export default function UserDetailPage() {
       {
         title: "状态", dataIndex: "status", width: 100,
         render: (v: ReportRecord["status"]) =>
-          v === "processed" ? <Tag color="success">已处理</Tag> : <Tag color="processing">待处理</Tag>,
+          v === "processed" ? <Tag color="success">已处理</Tag>
+            : v === "rejected" ? <Tag color="warning">已驳回</Tag>
+            : <Tag color="processing">待处理</Tag>,
       },
       {
         title: "封号时长", key: "banDays", width: 130,
@@ -244,15 +248,18 @@ export default function UserDetailPage() {
       },
       { title: "更新时间", dataIndex: "updatedAt", width: 170, render: (v: string) => formatDateTime(v) },
       {
-        title: "操作", key: "action", width: 160, fixed: "right" as const,
+        title: "操作", key: "action", width: 220, fixed: "right" as const,
         render: (_: unknown, record: ReportRecord) => {
-          const canProcess = record.status !== "processed";
-          const canRevoke = record.status === "processed";
+          const isPending = record.status === "pending";
+          const isProcessed = record.status === "processed";
           return (
             <Flex gap={8}>
-              <Button type="primary" size="small" disabled={!canProcess}
+              <Button type="primary" size="small" disabled={!isPending}
                 onClick={(e) => { e.stopPropagation(); openConfirmModal(record.id, "process"); }}>处理</Button>
-              <Button danger size="small" disabled={!canRevoke}
+              <Button size="small" disabled={!isPending}
+                style={isPending ? { color: "#faad14", borderColor: "#faad14" } : undefined}
+                onClick={(e) => { e.stopPropagation(); openConfirmModal(record.id, "reject"); }}>驳回</Button>
+              <Button danger size="small" disabled={!isProcessed}
                 onClick={(e) => { e.stopPropagation(); openConfirmModal(record.id, "revoke"); }}>撤销</Button>
             </Flex>
           );
@@ -311,7 +318,7 @@ export default function UserDetailPage() {
             rowKey="id"
             columns={columns}
             dataSource={records}
-            scroll={{ x: 1800 }}
+            scroll={{ x: 1900 }}
             pagination={false}
             onRow={(record) => ({
               onClick: () => { setDrawerRecord(record); setDrawerOpen(true); },

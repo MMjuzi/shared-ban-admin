@@ -1,6 +1,6 @@
-export type ReportStatus = "pending" | "processed";
+export type ReportStatus = "pending" | "processed" | "rejected";
 
-export type ReportAction = "process" | "revoke";
+export type ReportAction = "process" | "revoke" | "reject";
 
 export type DeviceType = "phone" | "tablet" | "pc";
 

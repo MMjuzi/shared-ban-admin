@@ -20,9 +20,11 @@ import type { Key } from "react";
 import {
   processReport,
   revokeReport,
+  rejectReport,
   getReportRecords,
   batchProcessReports,
   batchRevokeReports,
+  batchRejectReports,
 } from "@/services/report-service";
 import { ReportTable } from "@/components/ban-dashboard/report-table";
 import { ActionConfirmModal } from "@/components/ban-dashboard/action-confirm-modal";
@@ -72,10 +74,13 @@ export function DashboardClient() {
 
   const metrics = useMemo(() => {
     const pendingCount = records.filter((r) => r.status === "pending").length;
+    const processedCount = records.filter((r) => r.status === "processed").length;
+    const rejectedCount = records.filter((r) => r.status === "rejected").length;
     return {
       total: records.length,
       pendingCount,
-      processedCount: records.length - pendingCount,
+      processedCount,
+      rejectedCount,
       totalReporters: records.reduce((n, r) => n + r.reporters.length, 0),
     };
   }, [records]);
@@ -104,11 +109,14 @@ export function DashboardClient() {
         const isBatch = modalTargetIds.length > 1;
         const isSingle = modalTargetIds.length === 1;
 
+        const actionLabelMap = { process: "处理", revoke: "撤销", reject: "驳回" } as const;
+        const actionLabel = actionLabelMap[modalAction];
+
         if (isBatch) {
-          const updatedList =
-            modalAction === "process"
-              ? await batchProcessReports(modalTargetIds, remark)
-              : await batchRevokeReports(modalTargetIds, remark);
+          const batchFn = modalAction === "process" ? batchProcessReports
+            : modalAction === "reject" ? batchRejectReports
+            : batchRevokeReports;
+          const updatedList = await batchFn(modalTargetIds, remark);
 
           const updatedMap = new Map(updatedList.map((r) => [r.id, r]));
           setRecords((cur) =>
@@ -116,18 +124,16 @@ export function DashboardClient() {
           );
           setSelectedRowKeys([]);
           await messageApi.success(
-            `批量${modalAction === "process" ? "处理" : "撤销"}成功，共 ${updatedList.length} 条`
+            `批量${actionLabel}成功，共 ${updatedList.length} 条`
           );
         } else if (isSingle) {
           const id = modalTargetIds[0];
-          const updated =
-            modalAction === "process"
-              ? await processReport(id, remark)
-              : await revokeReport(id, remark);
+          const singleFn = modalAction === "process" ? processReport
+            : modalAction === "reject" ? rejectReport
+            : revokeReport;
+          const updated = await singleFn(id, remark);
           setRecords((cur) => cur.map((r) => (r.id === id ? updated : r)));
-          await messageApi.success(
-            modalAction === "process" ? "处理成功" : "撤销成功"
-          );
+          await messageApi.success(`${actionLabel}成功`);
         }
       } catch (e) {
         await messageApi.error(e instanceof Error ? e.message : "操作失败");
@@ -157,6 +163,15 @@ export function DashboardClient() {
     []
   );
 
+  const handleSingleReject = useCallback(
+    (id: string) => {
+      setActionLoadingId(id);
+      openConfirmModal([id], "reject");
+      setActionLoadingId(undefined);
+    },
+    []
+  );
+
   const handleRowClick = useCallback((record: ReportRecord) => {
     setDrawerRecord(record);
     setDrawerOpen(true);
@@ -179,7 +194,7 @@ export function DashboardClient() {
       "历史付费（元）": r.totalPaidAmount,
       "近一个月付费（元）": r.recentPaidAmount,
       "当月设备数": r.monthlyDeviceCount,
-      "状态": r.status === "processed" ? "已处理" : "待处理",
+      "状态": r.status === "processed" ? "已处理" : r.status === "rejected" ? "已驳回" : "待处理",
       "备注": r.remark ?? "",
       "操作人": r.operator ?? "",
       "更新时间": r.updatedAt,
@@ -216,16 +231,19 @@ export function DashboardClient() {
       <Content style={{ padding: 24 }}>
         <Flex vertical gap={16}>
           <Row gutter={[16, 16]}>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
               <Card><Statistic title="当前记录数" value={metrics.total} /></Card>
             </Col>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
               <Card><Statistic title="待处理" value={metrics.pendingCount} /></Card>
             </Col>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
               <Card><Statistic title="已处理" value={metrics.processedCount} /></Card>
             </Col>
-            <Col xs={24} sm={12} lg={6}>
+            <Col xs={24} sm={12} lg={5}>
+              <Card><Statistic title="已驳回" value={metrics.rejectedCount} valueStyle={{ color: "#faad14" }} /></Card>
+            </Col>
+            <Col xs={24} sm={12} lg={4}>
               <Card><Statistic title="总举报人数" value={metrics.totalReporters} /></Card>
             </Col>
           </Row>
@@ -248,6 +266,7 @@ export function DashboardClient() {
                     { label: "全部状态", value: "all" },
                     { label: "待处理", value: "pending" },
                     { label: "已处理", value: "processed" },
+                    { label: "已驳回", value: "rejected" },
                   ]}
                   onChange={(v) => setFilters((c) => ({ ...c, status: v }))}
                 />
@@ -274,6 +293,15 @@ export function DashboardClient() {
                   }
                 >
                   批量处理
+                </Button>
+                <Button
+                  size="small"
+                  style={{ color: "#faad14", borderColor: "#faad14" }}
+                  onClick={() =>
+                    openConfirmModal(selectedRowKeys.map(String), "reject")
+                  }
+                >
+                  批量驳回
                 </Button>
                 <Button
                   danger
@@ -306,6 +334,7 @@ export function DashboardClient() {
               onSelectionChange={setSelectedRowKeys}
               onProcess={handleSingleProcess}
               onRevoke={handleSingleRevoke}
+              onReject={handleSingleReject}
               onRowClick={handleRowClick}
             />
           </Card>

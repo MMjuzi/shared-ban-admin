@@ -598,7 +598,7 @@ export function updateMockReportStatus(
 
   report.status = status;
   report.updated_at = new Date().toISOString();
-  report.processed_at = status === "processed" ? new Date().toISOString() : undefined;
+  report.processed_at = (status === "processed" || status === "rejected") ? new Date().toISOString() : undefined;
   report.remark = remark ?? report.remark;
   report.operator = operator ?? report.operator;
 
@@ -613,10 +613,16 @@ export function updateMockReportStatus(
     report.ban_expires_at = undefined;
   }
 
+  const actionMap: Record<ReportStatus, ReportAction> = {
+    processed: "process",
+    rejected: "reject",
+    pending: "revoke",
+  };
+
   actionLogs.push({
     id: nextLogId(),
     report_id: id,
-    action: status === "processed" ? "process" : "revoke",
+    action: actionMap[status],
     operator: operator ?? "未知",
     remark: remark ?? "",
     created_at: new Date().toISOString(),
@@ -635,7 +641,12 @@ export function batchUpdateStatus(
   remark?: string,
   operator?: string,
 ) {
-  const status: ReportStatus = action === "process" ? "processed" : "pending";
+  const statusMap: Record<ReportAction, ReportStatus> = {
+    process: "processed",
+    reject: "rejected",
+    revoke: "pending",
+  };
+  const status: ReportStatus = statusMap[action];
   const results: RawReportRecord[] = [];
 
   for (const id of ids) {
